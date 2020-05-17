@@ -20,8 +20,6 @@ import cv2
 from sklearn.model_selection import KFold, StratifiedKFold, train_test_split
 from skimage.io import imread
 
-from apex import amp
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -118,7 +116,6 @@ def parse_args():
 
     parser.add_argument('--num_workers', default=4, type=int)
     parser.add_argument('--resume', action='store_true')
-    parser.add_argument('--apex', action='store_true')
 
     args = parser.parse_args()
 
@@ -141,11 +138,7 @@ def train(config, train_loader, model, criterion, optimizer, epoch):
 
         # compute gradient and do optimizing step
         optimizer.zero_grad()
-        if config['apex']:
-            with amp.scale_loss(loss, optimizer) as scaled_loss:
-                scaled_loss.backward()
-        else:
-            loss.backward()
+        loss.backward()
         optimizer.step()
 
         avg_meter.update(loss.item(), input.size(0))
@@ -413,9 +406,6 @@ def main():
                                   nesterov=config['nesterov'], weight_decay=config['weight_decay'])
         else:
             raise NotImplementedError
-
-        if config['apex']:
-            amp.initialize(model, optimizer, opt_level='O1')
 
         if config['scheduler'] == 'CosineAnnealingLR':
             scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=config['epochs'], eta_min=config['min_lr'])

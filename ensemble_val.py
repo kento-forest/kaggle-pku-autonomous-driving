@@ -20,8 +20,6 @@ import yaml
 from sklearn.model_selection import KFold, StratifiedKFold, train_test_split
 from skimage.io import imread
 
-from apex import amp
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
