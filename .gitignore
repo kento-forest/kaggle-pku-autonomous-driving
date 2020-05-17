@@ -16,5 +16,6 @@ pretrained_weights/*
 tmp*/*
 visualize_submission*.py
 markdowns/*
+.python-version
 
 !.gitkeep
