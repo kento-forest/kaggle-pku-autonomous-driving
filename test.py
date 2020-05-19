@@ -60,10 +60,12 @@ def parse_args():
 
 def main():
     args = parse_args()
+    args.uncropped = True
 
     with open('models/detection/%s/config.yml' % args.name, 'r') as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
 
+    config["tvec"] = False
     print('-'*20)
     for key in config.keys():
         print('%s: %s' % (key, str(config[key])))
@@ -78,7 +80,7 @@ def main():
     labels = np.array([convert_str_to_labels(s, names=['yaw', 'pitch', 'roll',
                        'x', 'y', 'z', 'score']) for s in df['PredictionString']])
 
-    if args.uncropped:
+    if not args.uncropped:
         cropped_img_ids = pd.read_csv('inputs/testset_cropped_imageids.csv')['ImageId'].values
         for i, img_id in enumerate(img_ids):
             if img_id in cropped_img_ids:
@@ -98,7 +100,8 @@ def main():
         test_set,
         batch_size=config['batch_size'],
         shuffle=False,
-        num_workers=config['num_workers'],
+        num_workers=0,
+        # num_workers=config['num_workers'],
         # pin_memory=True,
     )
 
@@ -119,6 +122,9 @@ def main():
 
     if config['wh']:
         heads['wh'] = 2
+    
+    if config['tvec']:
+        heads['tvec'] = 3
 
     name = args.name
     if args.uncropped:
@@ -142,6 +148,7 @@ def main():
                 'trig': 0 if config['rot'] == 'trig' else None,
                 'quat': 0 if config['rot'] == 'quat' else None,
                 'wh': 0 if config['wh'] else None,
+                'tvec': 0 if config['tvec'] else None,
             }
 
             merged_outputs[img_id] = output
@@ -198,6 +205,10 @@ def main():
 
                         if config['wh']:
                             output_hf['wh'] = torch.flip(output_hf['wh'], (-1,))
+                        
+                        if config['tvec']:
+                            output_hf['tvec'] = torch.flip(output_hf['tvec'], (-1,))
+                            output_hf['tvec'][:, 0] *= -1.0
 
                         output['hm'] = (output['hm'] + output_hf['hm']) / 2
                         output['reg'] = (output['reg'] + output_hf['reg']) / 2
@@ -206,6 +217,8 @@ def main():
                             output['trig'] = (output['trig'] + output_hf['trig']) / 2
                         if config['wh']:
                             output['wh'] = (output['wh'] + output_hf['wh']) / 2
+                        if config['tvec']:
+                            output['tvec'] = (output['tvec'] + output_hf['tvec']) / 2
 
                     for b in range(len(batch['img_path'])):
                         img_id = os.path.splitext(os.path.basename(batch['img_path'][b]))[0]
@@ -218,6 +231,7 @@ def main():
                             'trig': output['trig'][b:b+1].cpu() if config['rot'] == 'trig' else None,
                             'quat': output['quat'][b:b+1].cpu() if config['rot'] == 'quat' else None,
                             'wh': output['wh'][b:b+1].cpu() if config['wh'] else None,
+                            'tvec': output['tvec'][b:b+1].cpu() if config['tvec'] else None,
                             'mask': mask[b:b+1].cpu(),
                         }
 
@@ -232,6 +246,8 @@ def main():
                             merged_outputs[img_id]['quat'] += outputs_fold[img_id]['quat'] / config['n_splits']
                         if config['wh']:
                             merged_outputs[img_id]['wh'] += outputs_fold[img_id]['wh'] / config['n_splits']
+                        if config['tvec']:
+                            merged_outputs[img_id]['tvec'] += outputs_fold[img_id]['tvec'] / config['n_splits']
                         merged_outputs[img_id]['mask'] = outputs_fold[img_id]['mask']
 
                     batch_det = decode(
@@ -243,6 +259,7 @@ def main():
                         trig=output['trig'] if config['rot'] == 'trig' else None,
                         quat=output['quat'] if config['rot'] == 'quat' else None,
                         wh=output['wh'] if config['wh'] else None,
+                        tvec=output['tvec'] if config['tvec'] else None,
                         mask=mask,
                     )
                     batch_det = batch_det.cpu().numpy()
@@ -288,6 +305,7 @@ def main():
                     'trig': 0 if config['rot'] == 'trig' else None,
                     'quat': 0 if config['rot'] == 'quat' else None,
                     'wh': 0 if config['wh'] else None,
+                    'tvec': 0 if config['tvec'] else None,
                     'mask': 0,
                 }
                 for img_id in img_ids:
@@ -304,6 +322,8 @@ def main():
                         output['quat'] += merged_outputs[img_id]['quat'] / len(img_ids)
                     if config['wh']:
                         output['wh'] += merged_outputs[img_id]['wh'] / len(img_ids)
+                    if config['tvec']:
+                        output['tvec'] += merged_outputs[img_id]['tvec'] / len(img_ids)
                     output['mask'] += merged_outputs[img_id]['mask'] / len(img_ids)
 
                 for img_id in img_ids:
@@ -327,6 +347,7 @@ def main():
             trig=output['trig'] if config['rot'] == 'trig' else None,
             quat=output['quat'] if config['rot'] == 'quat' else None,
             wh=output['wh'] if config['wh'] else None,
+            tvec=output['tvec'] if config['tvec'] else None,
             mask=output['mask'],
         )
         det = det.numpy()[0]

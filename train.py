@@ -65,6 +65,7 @@ def parse_args():
     parser.add_argument('--freeze_bn', default=False, type=str2bool)
     parser.add_argument('--rot', default='trig', choices=['eular', 'trig', 'quat'])
     parser.add_argument('--wh', default=True, type=str2bool)
+    parser.add_argument('--tvec', default=True, type=str2bool)
     parser.add_argument('--gn', default=False, type=str2bool)
     parser.add_argument('--ws', default=False, type=str2bool)
     parser.add_argument('--lhalf', default=True, type=str2bool)
@@ -78,6 +79,8 @@ def parse_args():
     parser.add_argument('--reg_loss', default='L1Loss')
     parser.add_argument('--wh_loss', default='L1Loss')
     parser.add_argument('--wh_weight', default=0.05, type=float)
+    parser.add_argument('--tvec_loss', default='L1Loss')
+    parser.add_argument('--tvec_weight', default=0.05, type=float)
     parser.add_argument('--depth_loss', default='L1Loss')
     parser.add_argument('--eular_loss', default='L1Loss')
     parser.add_argument('--trig_loss', default='L1Loss')
@@ -163,6 +166,8 @@ def train(config, heads, train_loader, model, criterion, optimizer, epoch):
                                            mask if head == 'hm' else reg_mask)
             if head == 'wh':
                 loss += config['wh_weight'] * losses[head]
+            elif head == 'tvec':
+                loss += config['tvec_weight'] * losses[head]
             else:
                 loss += losses[head]
         losses['loss'] = loss
@@ -208,6 +213,8 @@ def validate(config, heads, val_loader, model, criterion):
                                                mask if head == 'hm' else reg_mask)
                 if head == 'wh':
                     loss += config['wh_weight'] * losses[head]
+                elif head == 'tvec':
+                    loss += config['tvec_weight'] * losses[head]
                 else:
                     loss += losses[head]
             losses['loss'] = loss
@@ -298,6 +305,9 @@ def main():
 
     if config['wh']:
         heads['wh'] = 2
+    
+    if config['tvec']:
+        heads['tvec'] = 3
 
     criterion = OrderedDict()
     for head in heads.keys():

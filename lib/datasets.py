@@ -78,18 +78,22 @@ class Dataset(torch.utils.data.Dataset):
                 }
 
             kpts = []
+            kpts_3d = []
             poses = []
             for k in range(num_objs):
                 ann = label[k]
                 kpts.append([ann['x'], ann['y'], ann['z']])
+                kpts_3d.append([ann['x'], ann['y'], ann['z']])
                 poses.append([ann['yaw'], ann['pitch'], ann['roll']])
             kpts = np.array(kpts)
+            kpts_3d = np.array(kpts_3d)
             poses = np.array(poses)
 
             if np.random.random() < self.hflip:
                 img = img[:, ::-1].copy()
                 mask = mask[:, ::-1].copy()
                 kpts[:, 0] *= -1
+                kpts_3d[:, 0] *= -1
                 poses[:, [0, 2]] *= -1
 
             if np.random.random() < self.scale:
@@ -108,12 +112,15 @@ class Dataset(torch.utils.data.Dataset):
                 mask = data['mask']
                 kpts = data['keypoints']
 
-            for k, ((x, y), (yaw, pitch, roll)) in enumerate(zip(kpts, poses)):
+            for k, ((x, y), (yaw, pitch, roll), (x_3d, y_3d, z_3d)), in enumerate(zip(kpts, poses, kpts_3d)):
                 label[k]['x'] = x
                 label[k]['y'] = y
                 label[k]['yaw'] = yaw
                 label[k]['pitch'] = pitch
                 label[k]['roll'] = roll
+                label[k]['x_3d'] = x_3d
+                label[k]['y_3d'] = y_3d
+                label[k]['z_3d'] = z_3d
 
             img = img.astype('float32') / 255
             img = (img - self.mean) / self.std
@@ -126,6 +133,7 @@ class Dataset(torch.utils.data.Dataset):
             reg = np.zeros((2, self.output_h, self.output_w), dtype=np.float32)
             wh = np.zeros((2, self.output_h, self.output_w), dtype=np.float32)
             depth = np.zeros((1, self.output_h, self.output_w), dtype=np.float32)
+            tvec = np.zeros((3, self.output_h, self.output_w), dtype=np.float32)
             eular = np.zeros((3, self.output_h, self.output_w), dtype=np.float32)
             trig = np.zeros((6, self.output_h, self.output_w), dtype=np.float32)
             quat = np.zeros((4, self.output_h, self.output_w), dtype=np.float32)
@@ -165,6 +173,10 @@ class Dataset(torch.utils.data.Dataset):
                 wh[1, ct_int[1], ct_int[0]] = h
                 depth[0, ct_int[1], ct_int[0]] = ann['z']
 
+                tvec[0, ct_int[1], ct_int[0]] = ann['x_3d']
+                tvec[1, ct_int[1], ct_int[0]] = ann['y_3d']
+                tvec[2, ct_int[1], ct_int[0]] = ann['z_3d']
+
                 yaw = ann['yaw']
                 pitch = ann['pitch']
                 roll = ann['roll']
@@ -202,6 +214,7 @@ class Dataset(torch.utils.data.Dataset):
                 reg = reg[:, self.output_h // 2:]
                 wh = wh[:, self.output_h // 2:]
                 depth = depth[:, self.output_h // 2:]
+                tvec = tvec[:, self.output_h // 2:]
                 eular = eular[:, self.output_h // 2:]
                 trig = trig[:, self.output_h // 2:]
                 quat = quat[:, self.output_h // 2:]
@@ -251,6 +264,7 @@ class Dataset(torch.utils.data.Dataset):
             reg = np.zeros((2, self.output_h // 2, self.output_w), dtype=np.float32)
             wh = np.zeros((2, self.output_h // 2, self.output_w), dtype=np.float32)
             depth = np.zeros((1, self.output_h // 2, self.output_w), dtype=np.float32)
+            tvec = np.zeros((3, self.output_h // 2, self.output_w), dtype=np.float32)
             eular = np.zeros((3, self.output_h // 2, self.output_w), dtype=np.float32)
             trig = np.zeros((6, self.output_h // 2, self.output_w), dtype=np.float32)
             quat = np.zeros((4, self.output_h // 2, self.output_w), dtype=np.float32)
@@ -261,6 +275,7 @@ class Dataset(torch.utils.data.Dataset):
             reg = output['reg'].numpy()[0]
             wh = output['wh'].numpy()[0]
             depth = output['depth'].numpy()[0]
+            tvec = output['tvec'].numpy()[0]
             eular = eular if output['eular'] is None else output['eular'].numpy()[0]
             trig = trig if output['trig'] is None else output['trig'].numpy()[0]
             quat = quat if output['quat'] is None else output['quat'].numpy()[0]
@@ -279,6 +294,7 @@ class Dataset(torch.utils.data.Dataset):
             'reg': reg,
             'wh': wh,
             'depth': depth,
+            'tvec': tvec,
             'eular': eular,
             'trig': trig,
             'quat': quat,

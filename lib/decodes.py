@@ -71,7 +71,7 @@ def convert_quat_to_euler(qx, qy, qz, qw):
     return yaw, pitch, roll
 
 
-def decode(config, hm, reg, depth, eular=None, trig=None, quat=None, wh=None, mask=None,
+def decode(config, hm, reg, depth, eular=None, trig=None, quat=None, wh=None, tvec=None, mask=None,
            K=100, org_width=3384, org_height=2710):
     batch, cat, height, width = hm.size()
     if config['lhalf']:
@@ -127,5 +127,14 @@ def decode(config, hm, reg, depth, eular=None, trig=None, quat=None, wh=None, ma
         wh[..., 0:1] *= org_width / width
         wh[..., 1:2] *= org_height / height
         dets = torch.cat([dets, wh], dim=2)
+    
+    # translation vector
+    if tvec is not None:
+        tvec = _tranpose_and_gather_feat(tvec, inds)
+        tvec = tvec.view(batch, K, 3)
+        x_3d = tvec[:, :, 0]
+        y_3d = tvec[:, :, 1]
+        z_3d = tvec[:, :, 2]
+        dets = torch.cat([dets, x_3d[..., None], y_3d[..., None], z_3d[..., None]], dim=2)
 
     return dets
