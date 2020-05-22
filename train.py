@@ -28,6 +28,7 @@ import torch.optim as optim
 from torch.optim import lr_scheduler
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import WeightedRandomSampler
+from torch.utils.tensorboard import SummaryWriter
 import torch.backends.cudnn as cudnn
 import torchvision
 
@@ -139,12 +140,14 @@ def parse_args():
     parser.add_argument('--num_workers', default=4, type=int)
     parser.add_argument('--resume', action='store_true')
 
+    parser.add_argument('--log_dir', default="./logs/", type=str)
+
     args = parser.parse_args()
 
     return args
 
 
-def train(config, heads, train_loader, model, criterion, optimizer, epoch):
+def train(config, heads, train_loader, model, criterion, optimizer, epoch, writer=None):
     avg_meters = {'loss': AverageMeter()}
     for head in heads.keys():
         avg_meters[head] = AverageMeter()
@@ -162,8 +165,7 @@ def train(config, heads, train_loader, model, criterion, optimizer, epoch):
         loss = 0
         losses = {}
         for head in heads.keys():
-            losses[head] = criterion[head](output[head], batch[head].cuda(),
-                                           mask if head == 'hm' else reg_mask)
+            losses[head] = criterion[head](output[head], batch[head].cuda(), mask if head == 'hm' else reg_mask)
             if head == 'wh':
                 loss += config['wh_weight'] * losses[head]
             elif head == 'tvec':
@@ -186,10 +188,21 @@ def train(config, heads, train_loader, model, criterion, optimizer, epoch):
         pbar.update(1)
     pbar.close()
 
+    # log to tensorboard
+    if writer is not None:
+
+        ## all head Loss in one window
+        writer.add_scalars("Losses/train", postfix, epoch)
+
+        ## set loss in each windows
+        writer.add_scalar("Loss_train/total", avg_meters['loss'].avg, epoch)
+        for head in heads.keys():
+            writer.add_scalar("Loss_train/{}".format(head), avg_meters[head].avg, epoch)
+
     return avg_meters['loss'].avg
 
 
-def validate(config, heads, val_loader, model, criterion):
+def validate(config, heads, val_loader, model, criterion, epoch, writer=None):
     avg_meters = {'loss': AverageMeter()}
     for head in heads.keys():
         avg_meters[head] = AverageMeter()
@@ -229,6 +242,17 @@ def validate(config, heads, val_loader, model, criterion):
 
         pbar.close()
 
+    # log to tensorboard
+    if writer is not None:
+
+        ## all head Loss in one window
+        writer.add_scalars("Losses/valid", postfix, epoch)
+
+        ## set loss in each windows
+        writer.add_scalar("Loss_valid/total", avg_meters['loss'].avg, epoch)
+        for head in heads.keys():
+            writer.add_scalar("Loss_valid/{}".format(head), avg_meters[head].avg, epoch)
+
     return avg_meters['loss'].avg
 
 
@@ -256,7 +280,7 @@ def main():
         print('- %s: %s' % (key, str(config[key])))
     print('-'*20)
 
-    cudnn.benchmark = True
+    cudnn.benchmark = False
 
     df = pd.read_csv('inputs/train.csv')
     img_paths = np.array('inputs/train_images/' + df['ImageId'].values + '.jpg')
@@ -355,6 +379,7 @@ def main():
     kf = KFold(n_splits=config['n_splits'], shuffle=True, random_state=41)
     for fold, (train_idx, val_idx) in enumerate(kf.split(img_paths)):
         print('Fold [%d/%d]' %(fold + 1, config['n_splits']))
+        writer = SummaryWriter(log_dir=config["log_dir"]+config["name"]+"/fold{:02d}".format(fold+1))
 
         if (config['resume'] and fold < checkpoint['fold'] - 1) or (not config['resume'] and os.path.exists('models/%s/model_%d.pth' % (config['name'], fold+1))):
             log = pd.read_csv('models/detection/%s/log_%d.csv' %(config['name'], fold+1))
@@ -474,9 +499,9 @@ def main():
             print('Epoch [%d/%d]' % (epoch + 1, config['epochs']))
 
             # train for one epoch
-            train_loss = train(config, heads, train_loader, model, criterion, optimizer, epoch)
+            train_loss = train(config, heads, train_loader, model, criterion, optimizer, epoch, writer=writer)
             # evaluate on validation set
-            val_loss = validate(config, heads, val_loader, model, criterion)
+            val_loss = validate(config, heads, val_loader, model, criterion, epoch, writer=writer)
 
             if config['scheduler'] == 'CosineAnnealingLR':
                 scheduler.step()
