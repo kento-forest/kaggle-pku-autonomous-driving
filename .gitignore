@@ -18,4 +18,7 @@ visualize_submission*.py
 markdowns/*
 .python-version
 
+logs/
+DCNv2
+
 !.gitkeep
