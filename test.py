@@ -65,13 +65,13 @@ def main():
     with open('models/detection/%s/config.yml' % args.name, 'r') as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
 
-    config["tvec"] = False
+    # config["tvec"] = False
     print('-'*20)
     for key in config.keys():
         print('%s: %s' % (key, str(config[key])))
     print('-'*20)
 
-    cudnn.benchmark = True
+    cudnn.benchmark = False
 
     df = pd.read_csv('inputs/sample_submission.csv')
     img_ids = df['ImageId'].values
@@ -98,7 +98,7 @@ def main():
         lhalf=config['lhalf'])
     test_loader = torch.utils.data.DataLoader(
         test_set,
-        batch_size=config['batch_size'],
+        batch_size=16,
         shuffle=False,
         num_workers=0,
         # num_workers=config['num_workers'],
