@@ -50,7 +50,7 @@ def parse_args():
 
     parser.add_argument('--name', default=None,
                         help='model name: (default: arch+timestamp)')
-    parser.add_argument('--epochs', default=50, type=int, metavar='N',
+    parser.add_argument('--epochs', default=100, type=int, metavar='N',
                         help='number of total epochs to run')
     parser.add_argument('-b', '--batch_size', default=4, type=int,
                         metavar='N', help='mini-batch size (default: 4)')
@@ -195,7 +195,13 @@ def train(config, heads, train_loader, model, criterion, optimizer, epoch, write
         writer.add_scalars("Losses/train", postfix, epoch)
 
         ## set loss in each windows
-        writer.add_scalar("Loss_train/total", avg_meters['loss'].avg, epoch)
+        if config["tvec"]:
+            writer.add_scalar("Loss_train/total_tvec", avg_meters['loss'].avg, epoch)
+            writer.add_scalar("Loss_train/total", avg_meters['loss'].avg - avg_meters["tvec"].avg * config["tvec_weight"], epoch)
+        
+        else:
+            writer.add_scalar("Loss_train/total", avg_meters['loss'].avg, epoch)
+
         for head in heads.keys():
             writer.add_scalar("Loss_train/{}".format(head), avg_meters[head].avg, epoch)
 
@@ -247,9 +253,15 @@ def validate(config, heads, val_loader, model, criterion, epoch, writer=None):
 
         ## all head Loss in one window
         writer.add_scalars("Losses/valid", postfix, epoch)
-
+    
         ## set loss in each windows
-        writer.add_scalar("Loss_valid/total", avg_meters['loss'].avg, epoch)
+        if config["tvec"]:
+            writer.add_scalar("Loss_valid/total_tvec", avg_meters['loss'].avg, epoch)
+            writer.add_scalar("Loss_valid/total", avg_meters['loss'].avg - avg_meters["tvec"].avg * config["tvec_weight"], epoch)
+        
+        else:
+            writer.add_scalar("Loss_valid/total", avg_meters['loss'].avg, epoch)
+
         for head in heads.keys():
             writer.add_scalar("Loss_valid/{}".format(head), avg_meters[head].avg, epoch)
 
