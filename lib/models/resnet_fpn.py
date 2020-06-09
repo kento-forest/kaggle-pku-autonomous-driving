@@ -175,15 +175,17 @@ class ResNetFPN(nn.Module):
             x = self.backbone.relu(x)
             x = self.backbone.maxpool(x)
 
+        xs = []
         for i in range(1, 5):
             if self.after_non_local == f'layer{i}':
                 x = self.non_local(x)
             x = getattr(self.backbone, f'layer{i}')(x)
+            xs.append(x)
 
-        lat4 = self.lateral4(x4)
-        lat3 = self.lateral3(x3)
-        lat2 = self.lateral2(x2)
-        lat1 = self.lateral1(x1)
+        lat4 = self.lateral4(xs[3])
+        lat3 = self.lateral3(xs[2])
+        lat2 = self.lateral2(xs[1])
+        lat1 = self.lateral1(xs[0])
 
         map4 = lat4
         map3 = lat3 + F.interpolate(map4, scale_factor=2, mode="nearest")
